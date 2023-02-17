@@ -1,9 +1,9 @@
 model_path: "EleutherAI/pythia-125m-deduped"
 tokenizer_path: "EleutherAI/gpt-neox-20b"
-save_dir: "/fsx/dakota/ckpts/pythia/125M-sft"
+save_dir: "/mnt/nvme/home/dakota/ckpts/pythia/125M-sft"
 
 train_args:
-  output_dir: "/fsx/dakota/ckpts/pythia/125M-sft"
+  output_dir: "/mnt/nvme/home/dakota/ckpts/pythia/125M-sft"
   num_train_epochs: 1
   logging_steps: 100
   save_strategy: "epoch"
