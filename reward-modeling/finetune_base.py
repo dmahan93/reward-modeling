@@ -17,11 +17,11 @@ def train(config):
     tokenizer.pad_token = tokenizer.eos_token
     training_args = TrainingArguments(**config["train_args"])
     model = AutoModelForCausalLM.from_pretrained(config["model_path"]).cuda()
-
+    print(config)
     data = load_dataset(config["data_path"])["train"]
     print("Len data: ", len(data))
 
-    dataset = SFTDataset(data, tokenizer)
+    dataset = SFTDataset(data, tokenizer, input_column=config.get("data_input_column", None), output_column=config.get("data_output_column", None))
     train_size = int(0.98 * len(dataset))
     train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
 

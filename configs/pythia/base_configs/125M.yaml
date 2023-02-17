@@ -18,3 +18,4 @@ train_args:
   evaluation_strategy: "epoch"
 
 data_path: "CarperAI/openai_summarize_tldr"
+data_output_column: "label"

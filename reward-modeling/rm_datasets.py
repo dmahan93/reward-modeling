@@ -4,14 +4,17 @@ from tqdm import tqdm
 
 # Anthropic fine-tunes language model on entire dialogue, not just responses
 class SFTDataset(Dataset):
-        def __init__(self, data, tokenizer):
+        def __init__(self, data, tokenizer, input_column=None, output_column=None):
             self.input_ids = []
             self.attn_masks = []
             self.labels = []
             self.prompts = []
             EOS_ID = tokenizer("<|endoftext|>")["input_ids"][0]
-
-            max_length = min(1024, max([len(tokenizer.encode(ele["prompt"] + "\n\n" + ele["response"] + '<|endoftext|>')) for ele in data]))
+            if input_column is None:
+                input_column = "prompt"
+            if output_column is None:
+                output_column = "response"
+            max_length = min(1024, max([len(tokenizer.encode(ele[input_column] + "\n\n" + ele[output_column] + '<|endoftext|>')) for ele in data]))
             print("Max length: {}".format(max_length))
 
             # Data expected in prompt response pairs
