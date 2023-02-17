@@ -19,7 +19,7 @@ class SFTDataset(Dataset):
 
             # Data expected in prompt response pairs
             for ele in tqdm(data):
-                prompt, response = ele["prompt"], ele["response"]
+                prompt, response = ele[input_column], ele[output_column]
                 prompt_encoding_len = len(tokenizer(prompt + "\n\n")["input_ids"])
                 encodings_dict = tokenizer(prompt + "\n\n" + response + '<|endoftext|>', truncation=True,
                                         max_length=max_length, padding="max_length")
