@@ -1,9 +1,9 @@
 model_path: "EleutherAI/gpt-neox-20b"
 tokenizer_path: "EleutherAI/gpt-neox-20b"
-save_dir: "/fsx/alex/ckpts/gptneox-sft"
+save_dir: "/mnt/nvme/home/dakota/ckpts/gptneox-sft"
 
 train_args:
-  output_dir: "/fsx/alex/ckpts/gptneox-sft"
+  output_dir: "/mnt/nvme/home/dakota/ckpts/gptneox-sft"
   num_train_epochs: 1
   logging_steps: 100
   save_strategy: "epoch"
@@ -19,4 +19,5 @@ train_args:
   evaluation_strategy: "epoch"
   gradient_checkpointing: True
 
-data_path: "Dahoas/sft-static"
+data_path: "CarperAI/openai_summarize_tldr"
+data_output_column: "label"
