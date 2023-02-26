@@ -109,10 +109,10 @@ def upload_model():
 
 
 def convert_deepspeed_checkpoint(is_rm=True):
-    model_name = "Dahoas/pythia-6B-static-sft"
+    model_name = "dmayhem93/neox-20B-Summarization-sft"
     tok_name = "EleutherAI/gpt-neox-20b"
-    model_path = "/fsx/alex/ckpts/pythia/synthetic-6B-rm"
-    model_ckpt = "checkpoint-13169/"
+    model_path = "/mnt/nvme/home/dakota/ckpts/gptneox-sft"
+    model_ckpt = "checkpoint-14299/"
     type_t = "causal"
     if is_rm:
         model = make_rm(model_name, type_t, tok_name)
@@ -127,7 +127,7 @@ def convert_deepspeed_checkpoint(is_rm=True):
         fp32_model.save_pretrained(os.path.join(model_path, "hf_ckpt"))
 
 def split_ckpt(num_chunks):
-    ckpt_path = "/fsx/alex/ckpts/gptneox-sft/hf_ckpt"
+    ckpt_path = "/mnt/nvme/home/dakota/ckpts/gptneox-sft/hf_ckpt"
     print("Splitting {} ...".format(ckpt_path))
     sd = torch.load(os.path.join(ckpt_path, "hf_ckpt.pt"))
     keys = list(sd.keys())
@@ -150,8 +150,8 @@ def split_ckpt(num_chunks):
 def hf_upload(make_repo=True):
     import os
     from huggingface_hub import HfApi, create_repo
-    converted_ckpt = "/fsx/alex/ckpts/pythia/synthetic-6B-rm/hf_ckpt"
-    repo_name = "Dahoas/pythia-6b-rm-synthetic"
+    converted_ckpt = "/mnt/nvme/home/dakota/ckpts/gptneox-sft/hf_ckpt"
+    repo_name = "dmayhem93/nexo-20B-Summarization-sft"
     if make_repo:
         create_repo(repo_name, repo_type="model", private=False)
 
@@ -170,6 +170,6 @@ def hf_upload(make_repo=True):
         print(f"Successfully uploaded {file} !")
 
 if __name__ == "__main__":
-    convert_deepspeed_checkpoint(is_rm=True)
-    #split_ckpt(46)
-    hf_upload(make_repo=False)
+    convert_deepspeed_checkpoint(is_rm=False)
+    split_ckpt(10)
+    hf_upload(make_repo=True)
