@@ -109,7 +109,7 @@ def upload_model():
 
 
 def convert_deepspeed_checkpoint(is_rm=True):
-    model_name = "dmayhem93/neox-20B-Summarization-sft"
+    model_name = "/mnt/nvme/home/dakota/ckpts/gptneox-sft/checkpoint-14299"
     tok_name = "EleutherAI/gpt-neox-20b"
     model_path = "/mnt/nvme/home/dakota/ckpts/gptneox-sft"
     model_ckpt = "checkpoint-14299/"
