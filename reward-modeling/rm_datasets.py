@@ -109,6 +109,62 @@ class PairwiseDataset(Dataset):
         return self.chosen_input_ids[idx], self.chosen_attn_masks[idx], self.rejected_input_ids[idx], self.rejected_attn_masks[idx]
 
 
+class ClassificationDataset(Dataset):
+    def __init__(self, prompts, tokenizer, max_length, max_num=-1, class_name="helpful"):
+        self.chosen_input_ids = []
+        self.chosen_attn_masks = []
+        self.class_values = []
+        PAD_ID = tokenizer.pad_token
+
+        for i, data_dict in enumerate(tqdm(prompts)):
+            if max_num >= 0 and i > max_num:
+                break
+            prompt = data_dict["prompt"]
+            tok_class = tokenizer(prompt + "<|endoftext|>", return_tensors="pt")["input_ids"]
+            # Reject data with num tokens > max_length
+            if tok_class.shape[-1] <= max_length:
+                class_encodings_dict = tokenizer(prompt + "<|endoftext|>", truncation=True,
+                                        max_length=max_length, padding="max_length", return_tensors="pt")
+                self.chosen_input_ids.append(class_encodings_dict['input_ids'])
+                self.chosen_attn_masks.append(class_encodings_dict['attention_mask'])
+                self.class_values.append(torch.ones([1, 1], dtype=torch.float32) if data_dict[class_name] else
+                                        torch.zeros([1, 1], dtype=torch.float32))
+
+    def __len__(self):
+        return len(self.chosen_input_ids)
+
+    def __getitem__(self, idx):
+        return self.chosen_input_ids[idx], self.chosen_attn_masks[idx], self.class_values[idx]
+
+
+class ClassificationEvalDataset(Dataset):
+    def __init__(self, prompts, tokenizer, max_length, max_num=-1, class_name="helpful"):
+        self.chosen_input_ids = []
+        self.chosen_attn_masks = []
+        self.class_values = []
+        PAD_ID = tokenizer.pad_token
+
+        for i, data_dict in enumerate(tqdm(prompts)):
+            if max_num >= 0 and i > max_num:
+                break
+            prompt = data_dict["prompt"]
+            tok_class = tokenizer(prompt + "<|endoftext|>", return_tensors="pt")["input_ids"]
+            # Reject data with num tokens > max_length
+            if tok_class.shape[-1] <= max_length:
+                class_encodings_dict = tokenizer(prompt + "<|endoftext|>", truncation=True,
+                                        max_length=max_length, padding="max_length", return_tensors="pt")
+                self.chosen_input_ids.append(class_encodings_dict['input_ids'])
+                self.chosen_attn_masks.append(class_encodings_dict['attention_mask'])
+                self.class_values.append(torch.ones([1, 1], dtype=torch.float32) if data_dict[class_name] else
+                                        torch.zeros([1, 1], dtype=torch.float32))
+
+    def __len__(self):
+        return len(self.chosen_input_ids)
+
+    def __getitem__(self, idx):
+        return self.chosen_input_ids[idx], self.chosen_attn_masks[idx]
+
+
 class PairwiseEvalDataset(Dataset):
     def __init__(self, pairs, tokenizer, max_length):
         self.input_ids = []
@@ -215,6 +271,14 @@ def pairwise_data_collator(data):
     elif len(data[0]) == 2:
         return {'input_ids': torch.cat([f[0] for f in data]),
                 'attention_mask': torch.cat([f[1] for f in data])}
+    else:
+        raise ValueError("Invalid data format")
+
+def classification_data_collator(data):
+    if len(data[0]) == 3:
+        return {'input_ids': torch.cat([f[0] for f in data]),
+                'attention_mask': torch.cat([f[1] for f in data]),
+                'labels': torch.cat([f[2] for f in data])}
     else:
         raise ValueError("Invalid data format")
 

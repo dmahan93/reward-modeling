@@ -5,7 +5,8 @@ from torch.utils.data import Dataset, random_split
 from transformers import AutoTokenizer, TrainingArguments, Trainer, AutoModelForCausalLM, IntervalStrategy, AutoModel, AutoConfig, PreTrainedModel, AutoModelForSequenceClassification
 import json
 import deepspeed
-from rm_datasets import PairwiseDataset, PairwiseEvalDataset, pairwise_data_collator, ranked_data_collator, RankedDataset, RankedEvalDataset
+from rm_datasets import PairwiseDataset, PairwiseEvalDataset, pairwise_data_collator, ranked_data_collator, \
+    RankedDataset, RankedEvalDataset, ClassificationDataset, classification_data_collator, ClassificationEvalDataset
 import argparse
 from utils import freeze_bottom_causal_layers, load_yaml, make_rm
 from datasets import load_dataset
@@ -35,6 +36,19 @@ class RankedTrainer(Trainer):
                 loss += -torch.log(torch.sigmoid(rewards[i] - rewards[j]))
         loss = loss[0] / (rewards.shape[0] * (rewards.shape[0] - 1) / 2)
         return (loss, rewards) if return_outputs else loss
+
+
+class ClassificationTrainer(Trainer):
+    def compute_loss(self, model, inputs, return_outputs=False):
+        # forward pass
+        PAD_ID = model.PAD_ID
+        bce = torch.nn.BCEWithLogitsLoss()
+        assert len(inputs["input_ids"].shape) == 2
+        bs = inputs["input_ids"].shape[0] // 2
+        labels = inputs.pop("labels")
+        rewards = model(**inputs).logits
+        loss = bce(rewards, labels)
+        return (loss, outputs) if return_outputs else loss
 
 
 class PairwiseTrainer(Trainer):
@@ -85,6 +99,9 @@ def train(config):
         order = config["order"]
         train_dataset = RankedDataset(train_data, tokenizer, max_length=max_length, order=order, max_num=config["max_train_size"])
         eval_dataset = RankedEvalDataset(eval_data, tokenizer, max_length=max_length, order=order, max_num=config["max_train_size"])
+    elif config["trainer_type"] == "classification":
+        train_dataset = ClassificationDataset(train_data, tokenizer, max_length=max_length, max_num=config["max_train_size"])
+        eval_dataset = ClassificationDataset(eval_data, tokenizer, max_length=max_length, max_num=config["max_train_size"])
     else:
         train_dataset = PairwiseDataset(train_data, tokenizer, max_length=max_length, max_num=config["max_train_size"])
         eval_dataset = PairwiseEvalDataset(eval_data, tokenizer, max_length=max_length)
@@ -98,6 +115,8 @@ def train(config):
             data_collator=pairwise_data_collator)
     elif config["trainer_type"] == "ranked":
         trainer = RankedTrainer(model=model, args=training_args, train_dataset=train_dataset, data_collator=ranked_data_collator)
+    elif config["trainer_type"] == "classification":
+        trainer = ClassificationTrainer(model=model, args=training_args, train_dataset=train_dataset, data_collator=classification_data_collator)
     else:
         trainer = PairwiseTrainer(model=model, args=training_args, train_dataset=train_dataset,
              data_collator=pairwise_data_collator)
@@ -134,6 +153,26 @@ def train(config):
         if torch.distributed.get_rank() == 0:
             wandb.log({"samples": wandb.Table(data=pd.DataFrame(samples))})
             wandb.log(accs)
+    elif config["trainer_type"] == "classification":
+        preds = torch.tensor(trainer.predict(eval_dataset)[0])
+        preds = preds.view(-1, 2)
+        samples = {"prompt": [], "helpful": [], "scores": []}
+        for i in range(16):
+            ele = eval_data[i]
+            samples["prompt"].append(ele["prompt"])
+            samples["helpful"].append(ele["helpful"])
+            samples["scores"].append(preds[i].tolist())
+        helpful = torch.cat(eval_dataset.class_values, 0).type(torch.float32)
+        # Subtracting rejected scores from chosen scores
+        pos = preds > 0
+        pos = pos.type(torch.float32) * helpful
+        neg = preds <= 0
+        neg = neg.type(torch.float32) * (1.0 - helpful)
+        acc = (pos + neg).type(torch.float32).mean().item()
+        print("Testing accuracy: ", acc)
+        if torch.distributed.get_rank() == 0:
+            wandb.log({"samples": wandb.Table(data=pd.DataFrame(samples))})
+            wandb.log({"acc": acc})
     else:
         preds = torch.tensor(trainer.predict(eval_dataset)[0])
         preds = preds.view(-1, 2)
