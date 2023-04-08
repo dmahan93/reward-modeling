@@ -2,6 +2,7 @@ from torch.utils.data import Dataset
 import torch
 from tqdm import tqdm
 
+
 # Anthropic fine-tunes language model on entire dialogue, not just responses
 class SFTDataset(Dataset):
         def __init__(self, data, tokenizer):
