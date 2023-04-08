@@ -46,7 +46,7 @@ class ClassificationTrainer(Trainer):
         assert len(inputs["input_ids"].shape) == 2
         bs = inputs["input_ids"].shape[0] // 2
         labels = inputs.pop("labels")
-        rewards = model(**inputs).logits
+        rewards = model(**inputs)
         loss = bce(rewards, labels)
         return (loss, outputs) if return_outputs else loss
 
