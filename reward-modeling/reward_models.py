@@ -45,6 +45,7 @@ class RewardModel(nn.Module):
         return_dict=False,
         output_attentions=False,
         output_hidden_states=False,
+        labels=None,
     ):
         loss=None
         transformer_outputs = self.transformer(

@@ -155,7 +155,7 @@ def train(config):
             wandb.log(accs)
     elif config["trainer_type"] == "classification":
         preds = torch.tensor(trainer.predict(eval_dataset)[0])
-        preds = preds.view(-1, 2)
+        preds = preds.view(-1, 1)
         samples = {"prompt": [], "helpful": [], "scores": []}
         for i in range(16):
             ele = eval_data[i]
