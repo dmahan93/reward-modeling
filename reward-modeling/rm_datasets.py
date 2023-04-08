@@ -195,6 +195,80 @@ class PairwiseEvalDataset(Dataset):
         return self.input_ids[idx], self.attn_masks[idx]
 
 
+class IndependentRankedDataset(Dataset):
+    def __init__(self, rankings, tokenizer, max_length, ranking="rankings", max_num=-1):
+        self.rankings_input_ids = []
+        self.rankings_attn_masks = []
+        self.rankings_rankings = []
+        PAD_ID = tokenizer.pad_token
+
+        for i, ranks in enumerate(tqdm(rankings)):
+            if max_num >= 0 and i > max_num:
+                break
+            prompt = ranks.pop("prompt")
+            toks = []
+            long = False
+            for response in ranks['answers']:
+                long = long or len(tokenizer(prompt + response + "<|endoftext|>", return_tensors="pt")["input_ids"]) > max_length
+            if long:
+                continue
+            # Reject data with num tokens > max_length
+            ranking_input_ids = []
+            ranking_attn_masks = []
+            for response in ranks['answers']:
+                encodings_dict = tokenizer(prompt + response + '<|endoftext|>', truncation=True, max_length=max_length, padding="max_length", return_tensors="pt")
+                ranking_input_ids.append(encodings_dict['input_ids'].view(1, -1))
+                ranking_attn_masks.append(encodings_dict['attention_mask'].view(1, -1))
+            ranking_input_ids = torch.cat(ranking_input_ids, dim=0)
+            ranking_attn_masks = torch.cat(ranking_attn_masks, dim=0)
+            self.rankings_input_ids.append(ranking_input_ids)
+            self.rankings_attn_masks.append(ranking_attn_masks)
+            self.rankings_rankings.append(ranks[ranking])
+
+    def __len__(self):
+        return len(self.rankings_input_ids)
+
+    def __getitem__(self, idx):
+        return self.rankings_input_ids[idx], self.rankings_attn_masks[idx], self.rankings_rankings[idx]
+
+
+class IndependentRankedEvalDataset(Dataset):
+    def __init__(self, rankings, tokenizer, max_length, ranking="rankings", max_num=-1):
+        self.rankings_input_ids = []
+        self.rankings_attn_masks = []
+        self.rankings_rankings = []
+        PAD_ID = tokenizer.pad_token
+
+        for i, ranks in enumerate(tqdm(rankings)):
+            if max_num >= 0 and i > max_num:
+                break
+            prompt = ranks.pop("prompt")
+            toks = []
+            long = False
+            for response in ranks['answers']:
+                long = long or len(tokenizer(prompt + response + "<|endoftext|>", return_tensors="pt")["input_ids"]) > max_length
+            if long:
+                continue
+            # Reject data with num tokens > max_length
+            ranking_input_ids = []
+            ranking_attn_masks = []
+            for response in ranks['answers']:
+                encodings_dict = tokenizer(prompt + response + '<|endoftext|>', truncation=True, max_length=max_length, padding="max_length", return_tensors="pt")
+                ranking_input_ids.append(encodings_dict['input_ids'].view(1, -1))
+                ranking_attn_masks.append(encodings_dict['attention_mask'].view(1, -1))
+            ranking_input_ids = torch.cat(ranking_input_ids, dim=0)
+            ranking_attn_masks = torch.cat(ranking_attn_masks, dim=0)
+            self.rankings_input_ids.append(ranking_input_ids)
+            self.rankings_attn_masks.append(ranking_attn_masks)
+            self.rankings_rankings.append(ranks[ranking])
+
+    def __len__(self):
+        return len(self.rankings_input_ids)
+
+    def __getitem__(self, idx):
+        return self.rankings_input_ids[idx], self.rankings_attn_masks[idx]
+
+
 class RankedDataset(Dataset):
     def __init__(self, rankings, tokenizer, max_length, order=["instruct", "20B", "6B", "1B", "125M"], max_num=-1):
         self.rankings_input_ids = []
@@ -288,4 +362,12 @@ def ranked_data_collator(data):
     return {
             "input_ids": torch.cat([f[0] for f in data], dim=0),
             "attention_mask": torch.cat([f[1] for f in data], dim=0),
+        }
+
+
+def independent_ranked_data_collator(data):
+    return {
+            "input_ids": torch.cat([f[0] for f in data], dim=0),
+            "attention_mask": torch.cat([f[1] for f in data], dim=0),
+            'labels': [f[2] for f in data]
         }
