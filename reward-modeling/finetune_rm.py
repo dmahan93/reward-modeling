@@ -2,7 +2,8 @@ import os
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, random_split
-from transformers import AutoTokenizer, TrainingArguments, Trainer, AutoModelForCausalLM, IntervalStrategy, AutoModel, AutoConfig, PreTrainedModel, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, TrainingArguments, Trainer, AutoModelForCausalLM, IntervalStrategy, AutoModel, \
+    AutoConfig, PreTrainedModel, AutoModelForSequenceClassification
 import json
 import deepspeed
 from rm_datasets import PairwiseDataset, PairwiseEvalDataset, pairwise_data_collator, ranked_data_collator, \
@@ -30,12 +31,12 @@ class SparsePairwiseTrainer(Trainer):
 class IndependentRankedTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False):
         # Batch ordered most to least preferable
-        labels = inputs.pop("labels")
+        labels = inputs.pop("labels")[0]
         rewards = model(**inputs)
         loss = 0
         count = 0
         for i in range(rewards.shape[0]):
-            for j in range(i+1, rewards.shape[0]):
+            for j in range(i + 1, rewards.shape[0]):
                 count += 1
                 if labels[i] < labels[j]:
                     loss += -torch.log(torch.sigmoid(rewards[i] - rewards[j]))
@@ -53,7 +54,7 @@ class RankedTrainer(Trainer):
         rewards = model(**inputs)
         loss = 0
         for i in range(rewards.shape[0]):
-            for j in range(i+1, rewards.shape[0]):
+            for j in range(i + 1, rewards.shape[0]):
                 loss += -torch.log(torch.sigmoid(rewards[i] - rewards[j]))
         loss = loss[0] / (rewards.shape[0] * (rewards.shape[0] - 1) / 2)
         return (loss, rewards) if return_outputs else loss
@@ -115,38 +116,48 @@ def train(config):
         split = data["train"].train_test_split(test_size=0.05)
         train_data = split["train"]
         eval_data = split["test"]
-    
+
     if config["trainer_type"] == "ranked":
         order = config["order"]
-        train_dataset = RankedDataset(train_data, tokenizer, max_length=max_length, order=order, max_num=config["max_train_size"])
-        eval_dataset = RankedEvalDataset(eval_data, tokenizer, max_length=max_length, order=order, max_num=config["max_train_size"])
+        train_dataset = RankedDataset(train_data, tokenizer, max_length=max_length, order=order,
+                                      max_num=config["max_train_size"])
+        eval_dataset = RankedEvalDataset(eval_data, tokenizer, max_length=max_length, order=order,
+                                         max_num=config["max_train_size"])
     elif config["trainer_type"] == "independent":
         ranking = config["ranking"]
-        train_dataset = IndependentRankedDataset(train_data, tokenizer, max_length=max_length, ranking=ranking, max_num=config["max_train_size"])
-        eval_dataset = IndependentRankedEvalDataset(eval_data, tokenizer, max_length=max_length, ranking=ranking, max_num=config["max_train_size"])
+        train_dataset = IndependentRankedDataset(train_data, tokenizer, max_length=max_length, ranking=ranking,
+                                                 max_num=config["max_train_size"])
+        eval_dataset = IndependentRankedEvalDataset(eval_data, tokenizer, max_length=max_length, ranking=ranking,
+                                                    max_num=config["max_train_size"])
     elif config["trainer_type"] == "classification":
-        train_dataset = ClassificationDataset(train_data, tokenizer, max_length=max_length, max_num=config["max_train_size"])
-        eval_dataset = ClassificationDataset(eval_data, tokenizer, max_length=max_length, max_num=config["max_train_size"])
+        train_dataset = ClassificationDataset(train_data, tokenizer, max_length=max_length,
+                                              max_num=config["max_train_size"])
+        eval_dataset = ClassificationDataset(eval_data, tokenizer, max_length=max_length,
+                                             max_num=config["max_train_size"])
     else:
         train_dataset = PairwiseDataset(train_data, tokenizer, max_length=max_length, max_num=config["max_train_size"])
         eval_dataset = PairwiseEvalDataset(eval_data, tokenizer, max_length=max_length)
 
     training_args = TrainingArguments(**config["train_args"])
     if config["trainer_type"] == "sparse":
-        trainer = SparsePairwiseTrainer(model=model, args=training_args, train_dataset=train_dataset, compute_metrics=compute_metrics,
-             eval_dataset=eval_dataset, data_collator=pairwise_data_collator)
+        trainer = SparsePairwiseTrainer(model=model, args=training_args, train_dataset=train_dataset,
+                                        compute_metrics=compute_metrics,
+                                        eval_dataset=eval_dataset, data_collator=pairwise_data_collator)
     elif config["trainer_type"] == "dense":
         trainer = DensePairwiseTrainer(model=model, args=training_args, train_dataset=train_dataset,
-            data_collator=pairwise_data_collator)
+                                       data_collator=pairwise_data_collator)
     elif config["trainer_type"] == "ranked":
-        trainer = RankedTrainer(model=model, args=training_args, train_dataset=train_dataset, data_collator=ranked_data_collator)
+        trainer = RankedTrainer(model=model, args=training_args, train_dataset=train_dataset,
+                                data_collator=ranked_data_collator)
     elif config["trainer_type"] == "independent":
-        trainer = IndependentRankedTrainer(model=model, args=training_args, train_dataset=train_dataset, data_collator=independent_ranked_data_collator)
+        trainer = IndependentRankedTrainer(model=model, args=training_args, train_dataset=train_dataset,
+                                           data_collator=independent_ranked_data_collator)
     elif config["trainer_type"] == "classification":
-        trainer = ClassificationTrainer(model=model, args=training_args, train_dataset=train_dataset, data_collator=classification_data_collator)
+        trainer = ClassificationTrainer(model=model, args=training_args, train_dataset=train_dataset,
+                                        data_collator=classification_data_collator)
     else:
         trainer = PairwiseTrainer(model=model, args=training_args, train_dataset=train_dataset,
-             data_collator=pairwise_data_collator)
+                                  data_collator=pairwise_data_collator)
     trainer.train()
 
     # NOTE: In order to run this install transformers from source
@@ -169,7 +180,7 @@ def train(config):
         accs = {}
         convert = {i: m for i, m in enumerate(order)}
         for i in range(num_ranks):
-            for j in range(i+1, num_ranks):
+            for j in range(i + 1, num_ranks):
                 diff = preds[:, i] - preds[:, j]
                 local_acc = (diff >= 0).type(torch.float32).sum().item()
                 acc += local_acc
@@ -183,43 +194,50 @@ def train(config):
     elif config["trainer_type"] == "independent":
         # num_ranks = len(order)
         preds = torch.tensor(trainer.predict(eval_dataset)[0])
-        preds = preds.view(-1, 5)
         samples = {m: [] for m in [f"answer_{i}" for i in range(5)]}
         samples["prompt"] = []
         samples["scores"] = []
         samples["labels"] = []
+        curr_count = 0
         for i in range(16):
             ele = eval_data[i]
-            for m in range(5):
+            for m in range(min(5, len(ele['rankings']))):
                 samples[f"answer_{m}"].append(ele['answers'][m])
+            if len(ele['rankings']) < 5:
+                for m in range(len(ele['rankings']), 5):
+                    samples[f"answer_{m}"].append("")
             samples["prompt"].append(ele["prompt"])
-            samples["scores"].append(preds[i].tolist())
-            samples["labels"].append(ele["ranking"])
+            samples["scores"].append(preds[curr_count:curr_count + len(ele['rankings'])].tolist())
+            samples["labels"].append(ele["rankings"])
+            curr_count += len(ele['rankings'])
         # Subtracting rejected scores from chosen scores
         acc = 0
         accs = {}
+        # convert = {i: m for i, m in enumerate(order)}
+        curr_preds = 0
         count = 0
-        convert = {i: m for i, m in enumerate(order)}
-        for i in range(5):
-            for j in range(i+1, 5):
-                acc_scoring = torch.zeros((preds.shape[0]), dtype=torch.float32)
-                for ranking in eval_dataset.rankings_rankings:
-                    if ranking[i] < ranking[j]:
-                        acc_scoring = 1.0
-                    elif ranking[i] > ranking[j]:
-                        acc_scoring = -1.0
-                diff = preds[:, i] - preds[:, j]
-                local_acc = (diff[acc_scoring == 1] >= 0).type(torch.float32).sum().item()
-                local_acc += (diff[acc_scoring == -1] < 0).type(torch.float32).sum().item()
-                acc += local_acc
-                count += torch.abs(acc_scoring)
-                accs[convert[i] + "-" + convert[j]] = local_acc / diff.shape[0]
-        acc = acc / count.item()
+        for i, ranking in enumerate(eval_dataset.rankings_rankings):
+            local_acc = 0.0
+            test_preds = preds[curr_preds:curr_preds + len(ranking)]
+            curr_preds += len(ranking)
+            for k in range(len(ranking)):
+                for j in range(k + 1, len(ranking)):
+                    diff = test_preds[k] - test_preds[j]
+                    count += 1
+                    if ranking[k] < ranking[j]:
+                        local_acc = local_acc + (diff >= 0).type(torch.float32).sum().item()
+                    elif ranking[k] > ranking[j]:
+                        local_acc = local_acc + (diff < 0).type(torch.float32).sum().item()
+                    else:
+                        count -= 1
+            acc += local_acc
+            # accs[convert[i] + "-" + convert[j]] = local_acc / diff.shape[0]
+        acc = acc / float(count)
         accs["total_acc"] = acc
         print("Testing accuracy: ", acc)
         if torch.distributed.get_rank() == 0:
             wandb.log({"samples": wandb.Table(data=pd.DataFrame(samples))})
-            wandb.log(accs)
+            wandb.log({"acc": acc})
     elif config["trainer_type"] == "classification":
         preds = torch.tensor(trainer.predict(eval_dataset)[0])
         preds = preds.view(-1, 1)
@@ -257,7 +275,7 @@ def train(config):
         if torch.distributed.get_rank() == 0:
             wandb.log({"samples": wandb.Table(data=pd.DataFrame(samples))})
             wandb.log({"acc": acc})
-        
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -256,10 +256,8 @@ class IndependentRankedEvalDataset(Dataset):
                 encodings_dict = tokenizer(prompt + response + '<|endoftext|>', truncation=True, max_length=max_length, padding="max_length", return_tensors="pt")
                 ranking_input_ids.append(encodings_dict['input_ids'].view(1, -1))
                 ranking_attn_masks.append(encodings_dict['attention_mask'].view(1, -1))
-            ranking_input_ids = torch.cat(ranking_input_ids, dim=0)
-            ranking_attn_masks = torch.cat(ranking_attn_masks, dim=0)
-            self.rankings_input_ids.append(ranking_input_ids)
-            self.rankings_attn_masks.append(ranking_attn_masks)
+            self.rankings_input_ids += ranking_input_ids
+            self.rankings_attn_masks += ranking_attn_masks
             self.rankings_rankings.append(ranks[ranking])
 
     def __len__(self):
