@@ -1,0 +1,25 @@
+model_path: "CarperAI/7b-alpha"
+tokenizer_path: "/fsx/dakota/stablelm_tokenizer"
+save_dir: "/fsx/dakota/ckpts/stablelm/7B-sft-instruct-following"
+
+train_args:
+  output_dir: "/fsx/dakota/ckpts/stablelm/7B-sft-instruct-following"
+  num_train_epochs: 2
+  logging_steps: 16
+  save_strategy: "epoch"
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 16
+  gradient_checkpointing: True
+  warmup_steps: 100
+  weight_decay: 0.01
+  learning_rate: 2.0e-5
+  save_total_limit: 1
+  logging_dir: "./logs"
+  adam_beta2: 0.99
+  fp16: True
+  evaluation_strategy: "epoch"
+
+data_path: "dmayhem93/ChatCombined"
+trainer: "text"
+max_text_len: 2048
