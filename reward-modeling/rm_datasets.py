@@ -1,6 +1,7 @@
 from torch.utils.data import Dataset
 import torch
 from tqdm import tqdm
+import os
 
 
 # Anthropic fine-tunes language model on entire dialogue, not just responses
@@ -12,7 +13,7 @@ class SFTDataset(Dataset):
             self.prompts = []
             EOS_ID = tokenizer("<|endoftext|>")["input_ids"][0]
 
-            max_length = min(1024, max([len(tokenizer.encode(ele["prompt"] + "\n\n" + ele["response"] + '<|endoftext|>')) for ele in data]))
+            max_length = min(4096, max([len(tokenizer.encode(ele["prompt"] + "\n\n" + ele["response"] + '<|endoftext|>')) for ele in data]))
             print("Max length: {}".format(max_length))
 
             # Data expected in prompt response pairs
@@ -35,6 +36,46 @@ class SFTDataset(Dataset):
             return self.input_ids[idx], self.attn_masks[idx], self.labels[idx], self.prompts[idx]
 
 
+class TextDataset(Dataset):
+        def __init__(self, data, tokenizer, max_text_len=4096, cache_name="train"):
+            self.input_ids = []
+            self.attn_masks = []
+            self.labels = []
+            self.prompts = []
+            EOS_ID = tokenizer("<|endoftext|>")["input_ids"][0]
+
+            max_length = max_text_len
+            print("Max length: {}".format(max_length))
+
+            # Data expected in prompt response pairs
+            if os.path.exists(cache_name + "inputids.pt"):
+                print("using cached dataset")
+                self.input_ids = torch.load(cache_name+"inputids.pt")
+                self.attn_masks = torch.load(cache_name+"attnmask.pt")
+                self.labels = torch.load(cache_name+"inputids.pt")
+                return
+            for ele in tqdm(data):
+                prompt = ele["text"]
+                prompt_encoding_len = len(tokenizer(prompt)["input_ids"])
+                encodings_dict = tokenizer(prompt + '<|endoftext|>', truncation=True,
+                                        max_length=max_length, padding="max_length")
+                input_id = torch.tensor(encodings_dict['input_ids'])
+                attn_mask = torch.tensor(encodings_dict['attention_mask'])
+                self.input_ids.append(input_id)
+                self.attn_masks.append(attn_mask)
+                self.labels.append(input_id)
+            torch.save(self.input_ids, cache_name+"inputids.pt")
+            torch.save(self.attn_masks, cache_name+"attnmask.pt")
+
+
+        def __len__(self):
+            return len(self.input_ids)
+
+        def __getitem__(self, idx):
+            return self.input_ids[idx], self.attn_masks[idx], self.labels[idx]
+
+
+
 # Only predicts on response tokens
 class MaskedSFTDataset(Dataset):
         def __init__(self, data, tokenizer):
@@ -42,7 +83,7 @@ class MaskedSFTDataset(Dataset):
             self.attn_masks = []
             self.labels = []
             self.prompts = []
-            EOS_ID = tokenizer("<|endoftext|>")["input_ids"][0]
+            EOS_ID = tokenizer.eos_token_id
 
             max_length = min(1024, max([len(tokenizer.encode(ele["prompt"] + "\n\n" + ele["response"] + '<|endoftext|>')) for ele in data]))
             print("Max length: {}".format(max_length))
@@ -51,7 +92,7 @@ class MaskedSFTDataset(Dataset):
             for ele in tqdm(data):
                 prompt, response = ele["prompt"], ele["response"]
                 prompt_encoding_len = len(tokenizer(prompt + "\n\n")["input_ids"])
-                encodings_dict = tokenizer(prompt + "\n\n" + response + '<|endoftext|>', truncation=True,
+                encodings_dict = tokenizer(prompt + "\n\n" + response + tokenizer.eos_token, truncation=True,
                                         max_length=max_length, padding="max_length")
                 input_id = torch.tensor(encodings_dict['input_ids'])
                 attn_mask = torch.tensor(encodings_dict['attention_mask'])
@@ -237,6 +278,7 @@ class IndependentRankedEvalDataset(Dataset):
         self.rankings_input_ids = []
         self.rankings_attn_masks = []
         self.rankings_rankings = []
+        self.rankings_eval = []
         PAD_ID = tokenizer.pad_token
 
         for i, ranks in enumerate(tqdm(rankings)):
@@ -252,19 +294,25 @@ class IndependentRankedEvalDataset(Dataset):
             # Reject data with num tokens > max_length
             ranking_input_ids = []
             ranking_attn_masks = []
+            ranking_eval = []
             for response in ranks['answers']:
                 encodings_dict = tokenizer(prompt + response + '<|endoftext|>', truncation=True, max_length=max_length, padding="max_length", return_tensors="pt")
                 ranking_input_ids.append(encodings_dict['input_ids'].view(1, -1))
                 ranking_attn_masks.append(encodings_dict['attention_mask'].view(1, -1))
+                ranking_eval.append(encodings_dict['attention_mask'].view(1, -1))
+            # ranking_input_ids = torch.cat(ranking_input_ids, dim=0)
+            # ranking_attn_masks = torch.cat(ranking_attn_masks, dim=0)
+            # ranking_eval = torch.cat(ranking_eval, dim=0)
             self.rankings_input_ids += ranking_input_ids
             self.rankings_attn_masks += ranking_attn_masks
             self.rankings_rankings.append(ranks[ranking])
+            self.rankings_eval += ranking_eval
 
     def __len__(self):
         return len(self.rankings_input_ids)
 
     def __getitem__(self, idx):
-        return self.rankings_input_ids[idx], self.rankings_attn_masks[idx]
+        return self.rankings_input_ids[idx], self.rankings_attn_masks[idx], self.rankings_eval[idx]
 
 
 class RankedDataset(Dataset):

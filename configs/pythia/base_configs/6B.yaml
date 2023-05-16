@@ -1,21 +1,25 @@
 model_path: "EleutherAI/pythia-6.9b-deduped"
-tokenizer_path: "EleutherAI/gpt-neox-20b"
-save_dir: "/fsx/alex/ckpts/pythia/6B-sft-response-full-static"
+tokenizer_path: "/fsx/dakota/stablelm_tokenizer"
+save_dir: "/fsx/dakota/ckpts/pythia/6B-sft-instruct-following"
 
 train_args:
-  output_dir: "/fsx/alex/ckpts/pythia/6B-sft-response-full-static"
-  num_train_epochs: 1
-  logging_steps: 100
+  output_dir: "/fsx/dakota/ckpts/pythia/6B-sft-instruct-following"
+  num_train_epochs: 2
+  logging_steps: 16
   save_strategy: "epoch"
   per_device_train_batch_size: 1
   per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 16
+  gradient_checkpointing: True
   warmup_steps: 100
   weight_decay: 0.01
-  learning_rate: 1.0e-5
+  learning_rate: 2.0e-5
   save_total_limit: 1
   logging_dir: "./logs"
+  adam_beta2: 0.99
   fp16: True
   evaluation_strategy: "epoch"
 
-data_path: "Dahoas/static-hh"
-trainer: "masked"
+data_path: "dmayhem93/InstructFollowing"
+trainer: "text"
+max_text_len: 2048
